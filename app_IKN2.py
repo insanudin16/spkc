@@ -48,58 +48,17 @@ def ahp_method(df, pairwise_matrix):
     df['Skor AHP'] = df.iloc[:, 1:].dot(weights)
     return df, weights, CI, CR
 
-# WP, SAW, and TOPSIS Functions
-def wp_method(df, weights):
-    criteria_cols = df.columns[1:-1]  # Asumsikan 'Alternatif' adalah kolom pertama dan 'Skor AHP' adalah kolom terakhir
-    
-    if len(weights) != len(criteria_cols):
-        st.error(f"Jumlah bobot ({len(weights)}) tidak sesuai dengan jumlah kriteria ({len(criteria_cols)})")
-        return df
-
-    df['Skor WP'] = np.prod(df[criteria_cols].values ** weights, axis=1)
-    return df
-
-def saw_method(df, weights):
-    criteria_cols = df.columns[1:-1]
-    
-    if len(weights) != len(criteria_cols):
-        st.error(f"Jumlah bobot ({len(weights)}) tidak sesuai dengan jumlah kriteria ({len(criteria_cols)})")
-        return df
-
-    df_norm = df[criteria_cols] / df[criteria_cols].max()
-    df['Skor SAW'] = np.dot(df_norm.values, weights)
-    return df
-
-def topsis_method(df, weights):
-    criteria_cols = df.columns[1:-1]
-    
-    if len(weights) != len(criteria_cols):
-        st.error(f"Jumlah bobot ({len(weights)}) tidak sesuai dengan jumlah kriteria ({len(criteria_cols)})")
-        return df
-
-    df_norm = df[criteria_cols] / np.sqrt((df[criteria_cols]**2).sum())
-    
-    weighted_norm = df_norm * weights
-    ideal_best = weighted_norm.max()
-    ideal_worst = weighted_norm.min()
-
-    distance_best = np.sqrt(((weighted_norm - ideal_best)**2).sum(axis=1))
-    distance_worst = np.sqrt(((weighted_norm - ideal_worst)**2).sum(axis=1))
-    
-    df['Skor TOPSIS'] = distance_worst / (distance_worst + distance_best)
-    return df
-
 # Streamlit App Layout
 st.sidebar.title('Navigasi')
-selection = st.sidebar.selectbox('Pilih Halaman', ['Home', 'Generate Data Dummy', 'Input/Edit Data Alternatif', 'Input Matriks Perbandingan Berpasangan (AHP)', 'Perhitungan dan Komparasi Algoritma', 'Hasil Terbaik'])
+selection = st.sidebar.selectbox('Pilih Halaman', ['Home', 'Generate Data Dummy', 'Input/Edit Data Alternatif', 'Input Matriks Perbandingan Berpasangan (AHP)', 'Hasil AHP'])
 
 if 'data_dummy' not in st.session_state:
     st.session_state['data_dummy'] = pd.DataFrame()
 
 if selection == 'Home':
-    st.title('Pemilihan Lahan di IKN Menggunakan Metode WP, SAW, AHP, dan TOPSIS')
+    st.title('Pemilihan Lahan di IKN Menggunakan Metode AHP')
     st.write("""
-    Aplikasi ini menggunakan berbagai metode untuk memilih lahan terbaik berdasarkan kriteria seperti Luas Lahan, Ketersediaan Air, Kedekatan Infrastruktur, dan Biaya Perolehan. Anda dapat meng-generate data dummy, memasukkan bobot, melakukan perhitungan dengan berbagai metode, serta membandingkan hasil dari berbagai algoritma.
+    Aplikasi ini menggunakan metode Analytic Hierarchy Process (AHP) untuk memilih lahan terbaik berdasarkan kriteria seperti Luas Lahan, Ketersediaan Air, Kedekatan Infrastruktur, dan Biaya Perolehan. Anda dapat meng-generate data dummy, mengedit data, memasukkan bobot, dan melakukan perhitungan dengan metode AHP.
     """)
 
 elif selection == 'Generate Data Dummy':
@@ -115,6 +74,22 @@ elif selection == 'Generate Data Dummy':
         csv = df_dummy.to_csv(index=False)
         st.download_button(label="Download Data sebagai CSV", data=csv, file_name='data_alternatif_lahan.csv', mime='text/csv')
         st.success(f'{num_data} baris data berhasil di-generate!')
+        st.info('Data telah otomatis dimasukkan ke menu Input/Edit Data Alternatif untuk pengeditan lebih lanjut.')
+
+elif selection == 'Input/Edit Data Alternatif':
+    st.title('Input/Edit Data Alternatif Lahan')
+
+    if st.session_state['data_dummy'].empty:
+        st.warning('Belum ada data. Silakan generate data terlebih dahulu di halaman Generate Data Dummy.')
+    else:
+        df = st.session_state['data_dummy'].copy()
+        
+        st.subheader('Edit Data Alternatif Lahan')
+        edited_df = st.data_editor(df)
+        
+        if st.button('Simpan Perubahan'):
+            st.session_state['data_dummy'] = edited_df
+            st.success('Data berhasil diperbarui!')
 
 elif selection == 'Input Matriks Perbandingan Berpasangan (AHP)':
     st.title('Input Matriks Perbandingan Berpasangan untuk AHP')
@@ -141,7 +116,7 @@ elif selection == 'Input Matriks Perbandingan Berpasangan (AHP)':
         if st.button('Hitung AHP'):
             df_dummy = st.session_state['data_dummy']
             df_ahp, weights, CI, CR = ahp_method(df_dummy.copy(), pairwise_matrix)
-            st.session_state['df_ahp'] = df_ahp # sampe siniiiiiiiiiiiiiii
+            st.session_state['df_ahp'] = df_ahp
             st.session_state['ahp_weights'] = weights
 
             st.subheader('Bobot Kriteria Berdasarkan AHP')
@@ -158,53 +133,8 @@ elif selection == 'Input Matriks Perbandingan Berpasangan (AHP)':
     else:
         st.warning('Silakan generate data terlebih dahulu di halaman Generate Data Dummy.')
 
-elif selection == 'Perhitungan dan Komparasi Algoritma':
-    st.title('Perhitungan dan Komparasi Algoritma')
-
-    if 'ahp_weights' in st.session_state and 'df_ahp' in st.session_state:
-        df_ahp = st.session_state['df_ahp']
-        weights = st.session_state['ahp_weights']
-
-        st.subheader('Data Alternatif dan Kriteria')
-        st.dataframe(df_ahp)
-
-        st.subheader('Bobot Kriteria')
-        criteria_labels = df_ahp.columns[1:-1].tolist()
-        for label, weight in zip(criteria_labels, weights):
-            st.write(f'{label}: {weight:.4f}')
-
-        st.subheader('Perhitungan Menggunakan AHP')
-        st.dataframe(df_ahp[['Alternatif', 'Skor AHP']])
-
-        # Menampilkan hasil WP
-        st.subheader('Perhitungan Menggunakan WP')
-        df_wp = wp_method(df_ahp.copy(), weights)
-        if 'Skor WP' in df_wp.columns:
-            st.dataframe(df_wp[['Alternatif', 'Skor WP']])
-        else:
-            st.error("Metode WP gagal menghitung skor.")
-
-        # Menampilkan hasil SAW
-        st.subheader('Perhitungan Menggunakan SAW')
-        df_saw = saw_method(df_ahp.copy(), weights)
-        if 'Skor SAW' in df_saw.columns:
-            st.dataframe(df_saw[['Alternatif', 'Skor SAW']])
-        else:
-            st.error("Metode SAW gagal menghitung skor.")
-
-        # Menampilkan hasil TOPSIS
-        st.subheader('Perhitungan Menggunakan TOPSIS')
-        df_topsis = topsis_method(df_ahp.copy(), weights)
-        if 'Skor TOPSIS' in df_topsis.columns:
-            st.dataframe(df_topsis[['Alternatif', 'Skor TOPSIS']])
-        else:
-            st.error("Metode TOPSIS gagal menghitung skor.")
-
-    else:
-        st.warning('Silakan lakukan perhitungan AHP terlebih dahulu untuk mendapatkan bobot kriteria.')
-
-elif selection == 'Hasil Terbaik':
-    st.title('Hasil Terbaik')
+elif selection == 'Hasil AHP':
+    st.title('Hasil AHP')
 
     if 'ahp_weights' in st.session_state and 'df_ahp' in st.session_state:
         df_ahp = st.session_state['df_ahp']
@@ -215,31 +145,9 @@ elif selection == 'Hasil Terbaik':
         for label, weight in zip(criteria_labels, weights):
             st.write(f'{label}: {weight:.4f}')
 
-        methods = ['AHP', 'WP', 'SAW', 'TOPSIS']
-        best_alternatives = {}
-
-        for method in methods:
-            if method == 'AHP':
-                df = df_ahp
-                score_column = 'Skor AHP'
-            elif method == 'WP':
-                df = wp_method(df_ahp.copy(), weights)
-                score_column = 'Skor WP'
-            elif method == 'SAW':
-                df = saw_method(df_ahp.copy(), weights)
-                score_column = 'Skor SAW'
-            elif method == 'TOPSIS':
-                df = topsis_method(df_ahp.copy(), weights)
-                score_column = 'Skor TOPSIS'
-
-            if score_column in df.columns:
-                best_alternatives[method] = df.loc[df[score_column].idxmax(), 'Alternatif']
-            else:
-                st.error(f"Metode {method} gagal menghitung skor.")
-
-        st.subheader('Hasil Terbaik dari Setiap Metode')
-        for method, best_alt in best_alternatives.items():
-            st.write(f"Alternatif terbaik berdasarkan {method}: **{best_alt}**")
+        st.subheader('5 Alternatif Terbaik Berdasarkan AHP')
+        top_5 = df_ahp.nlargest(5, 'Skor AHP')[['Alternatif', 'Skor AHP']]
+        st.dataframe(top_5)
 
     else:
-        st.warning('Silakan lakukan perhitungan AHP terlebih dahulu untuk mendapatkan bobot kriteria.')
+        st.warning('Silakan lakukan perhitungan AHP terlebih dahulu untuk mendapatkan hasil.')

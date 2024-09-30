@@ -104,9 +104,24 @@ elif selection == 'Input Matriks Perbandingan Berpasangan (AHP)':
 
         criteria_labels = ['C1 (Luas Lahan)', 'C2 (Ketersediaan Air)', 'C3 (Kedekatan Infrastruktur)', 'C4 (Biaya Perolehan)']
 
+        # Nilai default sesuai dengan matriks yang diberikan
+        default_values = {
+            (0, 1): 3, (0, 2): 2, (0, 3): 5,
+            (1, 2): 1/2, (1, 3): 4,
+            (2, 3): 3
+        }
+
         for i in range(num_criteria):
             for j in range(i+1, num_criteria):
-                value = st.number_input(f'Perbandingan {criteria_labels[i]} vs {criteria_labels[j]}', min_value=0.1, max_value=10.0, value=1.0)
+                default_value = default_values.get((i, j), 1.0)
+                value = st.number_input(
+                    f'Perbandingan {criteria_labels[i]} vs {criteria_labels[j]}',
+                    min_value=0.1,
+                    max_value=10.0,
+                    value=float(default_value),
+                    step=0.1,
+                    format="%.1f"
+                )
                 pairwise_matrix[i, j] = value
                 pairwise_matrix[j, i] = 1 / value
 

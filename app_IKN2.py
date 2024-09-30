@@ -4,19 +4,38 @@ import numpy as np
 from scipy.stats import rankdata
 
 # Random Index (RI) values for different matrix sizes (used in AHP)
-RI_dict = {1: 0, 2: 0, 3: 0.58, 4: 0.90, 5: 1.12, 6: 1.24, 7: 1.32, 8: 1.41, 9: 1.45, 10: 1.49}
+RI_dict = {1: 0, 2: 0, 3: 0.58, 4: 0.90, 5: 1.12, 6: 1.24, 7: 1.32, 8: 1.41, 9: 1.45, 10: 1.49,
+           11: 1.51, 12: 1.48, 13: 1.56, 14: 1.57, 15: 1.59}
 
 # Function to generate dummy data
-def generate_dummy_data(num_data):
+def generate_dummy_data(num_data, num_criteria):
     data = {
-        'Alternatif': [f'Lahan {i+1}' for i in range(num_data)],
-        'C1 (Luas Lahan)': np.random.randint(40, 100, size=num_data),
-        'C2 (Ketersediaan Air)': np.random.randint(10000, 20000, size=num_data),
-        'C3 (Kedekatan Infrastruktur)': np.random.randint(5, 20, size=num_data),
-        'C4 (Biaya Perolehan)': np.random.randint(80, 150, size=num_data)
+        'Alternatif': [f'Lahan {i+1}' for i in range(num_data)]
     }
+    for i in range(num_criteria):
+        data[f'C{i+1}'] = np.random.randint(1, 100, size=num_data)
     df = pd.DataFrame(data)
     return df
+
+# New function to generate consistent AHP matrices
+def generate_consistent_ahp_matrix(n):
+    """
+    Generate a consistent AHP matrix for n criteria.
+    """
+    # Generate random weights
+    weights = np.random.rand(n)
+    weights /= weights.sum()
+    
+    # Create the consistent matrix
+    matrix = np.outer(weights, 1/weights)
+    
+    # Round the matrix values to one decimal place
+    matrix = np.round(matrix, decimals=1)
+    
+    return matrix
+
+# Dictionary to store consistent matrices for 4-15 criteria
+consistent_matrices = {i: generate_consistent_ahp_matrix(i) for i in range(4, 16)}
 
 # AHP Functions
 def normalize_matrix(matrix):
@@ -33,7 +52,7 @@ def calculate_cr(matrix, weights):
     weighted_sum = np.dot(matrix, weights)
     lamda_max = weighted_sum.mean() / weights.mean()
     CI = (lamda_max - n) / (n - 1)
-    RI = RI_dict[n] if n in RI_dict else 1.49  # Default to RI for n = 10
+    RI = RI_dict[n]
     CR = CI / RI
     return CI, CR
 
@@ -54,26 +73,42 @@ selection = st.sidebar.selectbox('Pilih Halaman', ['Home', 'Generate Data Dummy'
 
 if 'data_dummy' not in st.session_state:
     st.session_state['data_dummy'] = pd.DataFrame()
+if 'num_criteria' not in st.session_state:
+    st.session_state['num_criteria'] = 4
 
 if selection == 'Home':
     st.title('Pemilihan Lahan di IKN Menggunakan Metode AHP')
     st.write("""
-    Aplikasi ini menggunakan metode Analytic Hierarchy Process (AHP) untuk memilih lahan terbaik berdasarkan kriteria seperti Luas Lahan, Ketersediaan Air, Kedekatan Infrastruktur, dan Biaya Perolehan. Anda dapat meng-generate data dummy, mengedit data, memasukkan bobot, dan melakukan perhitungan dengan metode AHP.
+    Aplikasi ini menggunakan metode Analytic Hierarchy Process (AHP) untuk memilih lahan terbaik berdasarkan kriteria yang dapat disesuaikan. 
+    Anda dapat meng-generate data dummy, mengedit data, memasukkan bobot, dan melakukan perhitungan dengan metode AHP.
     """)
 
 elif selection == 'Generate Data Dummy':
-    st.title('Generate Dummy Data Alternatif Lahan')
+    st.title('Generate Data Dummy Alternatif Lahan')
     
     num_data = st.number_input('Jumlah data yang ingin di-generate', min_value=1, max_value=1000, value=10)
+    
+    st.subheader('Kriteria')
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button('Tambah Kriteria', key='add_criteria'):
+            if st.session_state['num_criteria'] < 15:
+                st.session_state['num_criteria'] += 1
+    with col2:
+        if st.button('Kurangi Kriteria', key='remove_criteria'):
+            if st.session_state['num_criteria'] > 2:
+                st.session_state['num_criteria'] -= 1
+    
+    st.write(f"Jumlah kriteria saat ini: {st.session_state['num_criteria']}")
 
     if st.button('Generate Data'):
-        df_dummy = generate_dummy_data(num_data)
+        df_dummy = generate_dummy_data(num_data, st.session_state['num_criteria'])
         st.session_state['data_dummy'] = df_dummy
         st.subheader('Data Alternatif Lahan yang Dihasilkan')
         st.dataframe(df_dummy)
         csv = df_dummy.to_csv(index=False)
         st.download_button(label="Download Data sebagai CSV", data=csv, file_name='data_alternatif_lahan.csv', mime='text/csv')
-        st.success(f'{num_data} baris data berhasil di-generate!')
+        st.success(f'{num_data} baris data dengan {st.session_state["num_criteria"]} kriteria berhasil di-generate!')
         st.info('Data telah otomatis dimasukkan ke menu Input/Edit Data Alternatif untuk pengeditan lebih lanjut.')
 
 elif selection == 'Input/Edit Data Alternatif':
@@ -98,34 +133,32 @@ elif selection == 'Input Matriks Perbandingan Berpasangan (AHP)':
         st.subheader('Data Alternatif Lahan')
         st.dataframe(st.session_state['data_dummy'])
 
-        st.subheader('Matriks Perbandingan Berpasangan (Isi Nilai di Bawah)')
-        num_criteria = 4
-        pairwise_matrix = np.ones((num_criteria, num_criteria))
+        st.subheader('Matriks Perbandingan Berpasangan')
+        num_criteria = st.session_state['num_criteria']
+        criteria_labels = [f'C{i+1}' for i in range(num_criteria)]
 
-        criteria_labels = ['C1 (Luas Lahan)', 'C2 (Ketersediaan Air)', 'C3 (Kedekatan Infrastruktur)', 'C4 (Biaya Perolehan)']
+        # Use default consistent matrix or custom input
+        use_default = st.checkbox('Gunakan matriks konsisten default', value=True)
 
-        # Nilai default sesuai dengan matriks yang diberikan
-        default_values = {
-            (0, 1): 3, (0, 2): 2, (0, 3): 5,
-            (1, 2): 1/2, (1, 3): 4,
-            (2, 3): 3
-        }
+        if use_default:
+            pairwise_matrix = consistent_matrices[num_criteria]
+        else:
+            pairwise_matrix = np.ones((num_criteria, num_criteria))
+            for i in range(num_criteria):
+                for j in range(i+1, num_criteria):
+                    value = st.number_input(
+                        f'Perbandingan {criteria_labels[i]} vs {criteria_labels[j]}',
+                        min_value=0.1,
+                        max_value=10.0,
+                        value=float(pairwise_matrix[i, j]),
+                        step=0.1,
+                        format="%.1f",
+                        key=f'comp_{i}_{j}'
+                    )
+                    pairwise_matrix[i, j] = value
+                    pairwise_matrix[j, i] = 1 / value
 
-        for i in range(num_criteria):
-            for j in range(i+1, num_criteria):
-                default_value = default_values.get((i, j), 1.0)
-                value = st.number_input(
-                    f'Perbandingan {criteria_labels[i]} vs {criteria_labels[j]}',
-                    min_value=0.1,
-                    max_value=10.0,
-                    value=float(default_value),
-                    step=0.1,
-                    format="%.1f"
-                )
-                pairwise_matrix[i, j] = value
-                pairwise_matrix[j, i] = 1 / value
-
-        st.subheader('Matriks Perbandingan yang Dimasukkan')
+        st.subheader('Matriks Perbandingan yang Digunakan')
         st.dataframe(pd.DataFrame(pairwise_matrix, index=criteria_labels, columns=criteria_labels))
 
         if st.button('Hitung AHP'):
